@@ -1,18 +1,21 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using DG.Tweening;
 
 public class Player : MonoBehaviour
 {
+    public LayerMask player;
     public float acceleration;
     public float decceleration;
     public float maxSpeed;
 
     Animator anim;
-    Vector3 rawInput;
+    public Vector3 rawInput;
     Vector3 calculatedInput;
 
     public bool isJumping;
+    public bool isVaulting;
     // Start is called before the first frame update
     void Start()
     {
@@ -23,12 +26,53 @@ public class Player : MonoBehaviour
     void Update()
     {
         HandleInputs();
+        HandleVault();
 
         //UPDATES THE ANIMATOR TO PLAY THE LOCOMOTION ANIMATIONS
         anim.SetFloat("Vertical", calculatedInput.z);
         anim.SetFloat("Horizontal", calculatedInput.x);
 
         HandleJump();
+        anim.SetBool("isGrounded", IsGrounded());
+    }
+
+    void HandleVault()
+    {
+        if (!Input.GetKeyDown(KeyCode.V))
+            return;
+
+        if (isVaulting)
+            return;
+        if (Physics.Raycast(transform.position + new Vector3(0, 0.2f, 0),transform.forward * 100f, out RaycastHit hit, 2f, ~player))
+        {
+            if(hit.transform.CompareTag("vaultable"))
+            {
+                if(Vector3.Dot(transform.forward,hit.transform.forward) >=0f)
+                    transform.rotation = Quaternion.LookRotation(hit.transform.forward);
+                else
+                    transform.rotation = Quaternion.LookRotation(-hit.transform.forward);
+                Vector3 point = new Vector3(hit.point.x, 0, hit.point.z);;       
+                if(rawInput.z == 0)
+                    StartCoroutine(Vault(point,"short_vault",0.9f));    
+                else
+                    StartCoroutine(Vault(point, "long_vault",0.5f));
+            }  
+        }
+    }
+
+    IEnumerator Vault(Vector3 vault,string animTrigger, float moveTime)
+    {
+        GetComponent<CapsuleCollider>().enabled = false;
+        isVaulting = true;
+
+
+        transform.DOMove(vault, moveTime);
+        anim.SetTrigger(animTrigger);
+
+        yield return new WaitForSeconds(1.4f);
+
+        isVaulting = false;
+        GetComponent<CapsuleCollider>().enabled = true;
     }
 
     void HandleInputs()
@@ -89,5 +133,10 @@ public class Player : MonoBehaviour
             //QUATERNION LOOK ROTATION CHANGES THE VECTOR INTO A QUATERNION
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(calculatedInput), 0.25f);
         }
+    }
+
+
+    public bool IsGrounded(){
+        return Physics.Raycast(transform.position, -Vector3.up, 0.1f);
     }
 }
