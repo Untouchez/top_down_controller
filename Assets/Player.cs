@@ -16,6 +16,8 @@ public class Player : MonoBehaviour
 
     public bool isJumping;
     public bool isVaulting;
+
+    public float angle;
     // Start is called before the first frame update
     void Start()
     {
@@ -34,6 +36,10 @@ public class Player : MonoBehaviour
 
         HandleJump();
         anim.SetBool("isGrounded", IsGrounded());
+
+        angle = Vector3.Angle(transform.TransformDirection(rawInput), transform.forward);
+        Debug.DrawRay(transform.position, transform.forward*20f, Color.red);
+        Debug.DrawRay(transform.position, transform.TransformDirection(rawInput)*20f, Color.green);
     }
 
     void HandleVault()
@@ -47,15 +53,17 @@ public class Player : MonoBehaviour
         {
             if(hit.transform.CompareTag("vaultable"))
             {
+                Collider hitCollider = hit.transform.GetComponent<Collider>();
+                Vector3 closestPoint = hitCollider.ClosestPoint(transform.position);
                 if(Vector3.Dot(transform.forward,hit.transform.forward) >=0f)
                     transform.rotation = Quaternion.LookRotation(hit.transform.forward);
                 else
                     transform.rotation = Quaternion.LookRotation(-hit.transform.forward);
-                Vector3 point = new Vector3(hit.point.x, 0, hit.point.z);;       
+                Vector3 point = new Vector3(closestPoint.x, 0, closestPoint.z);;       
                 if(rawInput.z == 0)
                     StartCoroutine(Vault(point,"short_vault",0.9f));    
                 else
-                    StartCoroutine(Vault(point, "long_vault",0.5f));
+                    StartCoroutine(Vault(point, "long_vault",0.4f));
             }  
         }
     }
@@ -64,10 +72,8 @@ public class Player : MonoBehaviour
     {
         GetComponent<CapsuleCollider>().enabled = false;
         isVaulting = true;
-
-
-        transform.DOMove(vault, moveTime);
         anim.SetTrigger(animTrigger);
+        transform.DOMove(vault, moveTime);
 
         yield return new WaitForSeconds(1.4f);
 
@@ -121,22 +127,23 @@ public class Player : MonoBehaviour
 
     }
 
-    //we dont want to use this function tho because we want to handle our rotation with root motion
-    public void HandleRotation()
-    {
-        //MAGNITUDE IS JUST RAW INPUT X,Y,Z ADDED TOGETHER
-        //SO IF THERES NO INPUT ON WASD FROM PLAYER THEN RUN
-        if (rawInput.magnitude != 0)
-        {
-            //ROTATES THE PLAYER SLOWLY
-            //WHAT SLERP DOES IS CHANGE THE FIRST VALUE TO THE SECOND VALUE BY A SPEED VALUE
-            //QUATERNION LOOK ROTATION CHANGES THE VECTOR INTO A QUATERNION
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(calculatedInput), 0.25f);
-        }
-    }
-
-
     public bool IsGrounded(){
         return Physics.Raycast(transform.position, -Vector3.up, 0.1f);
+    }
+
+    public void ChangeCollider(int val)
+    {
+        if (val ==1)
+        {
+            CapsuleCollider myCollider = transform.GetComponent<CapsuleCollider>();
+            myCollider.center = new Vector3(0,1.5f,0);
+            myCollider.height = 0.4f;
+
+        } else {
+            CapsuleCollider myCollider = transform.GetComponent<CapsuleCollider>();
+            myCollider.center = new Vector3(0, 1f, 0);
+            myCollider.height = 2f;
+        }
+
     }
 }
