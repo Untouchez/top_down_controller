@@ -5,22 +5,30 @@ using DG.Tweening;
 
 public class Player : MonoBehaviour
 {
+    Animator anim;
     public LayerMask player;
+
     public float acceleration;
     public float decceleration;
     public float maxSpeed;
 
-    Animator anim;
-    public Vector3 rawInput;
-    Vector3 calculatedInput;
-
+    public bool isInCover;
     public bool isJumping;
     public bool isVaulting;
 
-    public float angle;
+    Vector3 rawInput;
+    Vector3 calculatedInput;
+    float angle;
+    Transform infront;
+
+    bool canMoveRight;
+    bool canMoveLeft;
+
     // Start is called before the first frame update
     void Start()
     {
+        canMoveRight = true;
+        canMoveLeft = true;
         anim = GetComponent<Animator>();
     }
 
@@ -35,11 +43,75 @@ public class Player : MonoBehaviour
         anim.SetFloat("Horizontal", calculatedInput.x);
 
         HandleJump();
+
         anim.SetBool("isGrounded", IsGrounded());
 
         angle = Vector3.Angle(transform.TransformDirection(rawInput), transform.forward);
         Debug.DrawRay(transform.position, transform.forward*20f, Color.red);
         Debug.DrawRay(transform.position, transform.TransformDirection(rawInput)*20f, Color.green);
+    }
+
+    private void LateUpdate()
+    {
+        HandleCover();
+    }
+
+    public void HandleCover()
+    {
+        if(Input.GetKeyDown(KeyCode.Q))
+        {
+            infront = null;
+            infront = WhatsInfront(0.5f,0f,0.2f);
+
+            if (infront == null) 
+                return;           
+
+            isInCover = !isInCover;
+            if (isInCover)
+            {
+                Collider hitCollider = infront.GetComponent<Collider>();
+                Vector3 closestPoint = hitCollider.ClosestPoint(transform.position);
+                closestPoint = Vector3.MoveTowards(transform.position, closestPoint, 0.22f);
+                transform.rotation = Quaternion.LookRotation(closestPoint - transform.position);
+                transform.DOMove(closestPoint, 0.3f);
+            }else
+            {
+                canMoveRight = true;
+                canMoveLeft = true;
+            }
+            anim.SetBool("cover",isInCover);
+        }
+
+        if(isInCover)
+        {
+            infront = WhatsInfront(0.2f, 0f,0.2f);
+            if (infront == null)
+            {
+                isInCover = false; 
+                canMoveRight = true;
+                canMoveLeft = true;
+                return;
+            }
+            Collider hitCollider = infront.GetComponent<Collider>();
+            Vector3 closestPoint = hitCollider.ClosestPoint(transform.position);
+            closestPoint = Vector3.MoveTowards(transform.position, closestPoint, 1f);
+            transform.rotation = Quaternion.LookRotation((closestPoint - transform.position).normalized);
+            if(WhatsInfront(0.5f,1f,0.2f)) 
+                canMoveLeft = true;
+            else
+            {
+                canMoveLeft = false;
+                  
+            }
+
+            if (WhatsInfront(0.5f, -1f,0.2f))
+                canMoveRight = true;
+            else
+            {
+                canMoveRight = false;
+
+            }
+        }
     }
 
     void HandleVault()
@@ -49,22 +121,23 @@ public class Player : MonoBehaviour
 
         if (isVaulting)
             return;
-        if (Physics.Raycast(transform.position + new Vector3(0, 0.2f, 0),transform.forward * 100f, out RaycastHit hit, 2f, ~player))
+
+        infront = null;
+        infront = WhatsInfront(0.2f,0f,0.2f);
+
+        if(infront)
         {
-            if(hit.transform.CompareTag("vaultable"))
-            {
-                Collider hitCollider = hit.transform.GetComponent<Collider>();
-                Vector3 closestPoint = hitCollider.ClosestPoint(transform.position);
-                if(Vector3.Dot(transform.forward,hit.transform.forward) >=0f)
-                    transform.rotation = Quaternion.LookRotation(hit.transform.forward);
-                else
-                    transform.rotation = Quaternion.LookRotation(-hit.transform.forward);
-                Vector3 point = new Vector3(closestPoint.x, 0, closestPoint.z);;       
-                if(rawInput.z == 0)
-                    StartCoroutine(Vault(point,"short_vault",0.9f));    
-                else
-                    StartCoroutine(Vault(point, "long_vault",0.4f));
-            }  
+            Collider hitCollider = infront.GetComponent<Collider>();
+            Vector3 closestPoint = hitCollider.ClosestPoint(transform.position);
+            if (Vector3.Dot(transform.forward, infront.forward) >= 0f)
+                transform.rotation = Quaternion.LookRotation(infront.forward);
+            else
+                transform.rotation = Quaternion.LookRotation(-infront.forward);
+            Vector3 point = new Vector3(closestPoint.x, 0, closestPoint.z); ;
+            if (rawInput.z == 0)
+                StartCoroutine(Vault(point, "short_vault", 0.8f));
+            else
+                StartCoroutine(Vault(point, "long_vault", 0.3f));
         }
     }
 
@@ -104,6 +177,12 @@ public class Player : MonoBehaviour
         //CLAMP THE VALUES SO SPEED DOESNT GO TO ABSURD AMOUNTS
         calculatedInput.x = Mathf.Clamp(calculatedInput.x, -maxSpeed, maxSpeed);
         calculatedInput.z = Mathf.Clamp(calculatedInput.z, -maxSpeed, maxSpeed);
+
+        if (!canMoveRight)
+            calculatedInput.x = Mathf.Clamp(calculatedInput.x, 0, 1);
+
+        if (!canMoveLeft)
+            calculatedInput.x = Mathf.Clamp(calculatedInput.x, -1, -0);
     }
 
     void HandleJump()
@@ -129,6 +208,14 @@ public class Player : MonoBehaviour
 
     public bool IsGrounded(){
         return Physics.Raycast(transform.position, -Vector3.up, 0.1f);
+    }
+
+    public Transform WhatsInfront(float yOffset, float xOffset, float radius)
+    {
+        Debug.DrawRay(transform.position + transform.TransformVector(new Vector3(xOffset, yOffset, -1f)), transform.forward * 3f, Color.green, 0.2f);
+        if (Physics.SphereCast(transform.position + transform.TransformVector(new Vector3(xOffset, yOffset, -1f)),radius, transform.forward * 3f, out RaycastHit hit, 3f, ~player))       
+            return hit.transform;        
+        return null;
     }
 
     public void ChangeCollider(int val)
