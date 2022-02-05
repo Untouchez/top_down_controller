@@ -2,9 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DG.Tweening;
+using UnityEngine.Animations.Rigging;
+
 
 public class Player : MonoBehaviour
 {
+    public Animator bowAnimator;
+    public Transform mouseAim;
+    public Rig spineAim;
     Animator anim;
     public LayerMask player;
 
@@ -15,7 +20,8 @@ public class Player : MonoBehaviour
     public bool isInCover;
     public bool isJumping;
     public bool isVaulting;
-
+    public bool hasBow;
+    public bool hasDrawn;
     Vector3 rawInput;
     Vector3 calculatedInput;
     float angle;
@@ -49,9 +55,51 @@ public class Player : MonoBehaviour
         angle = Vector3.Angle(transform.TransformDirection(rawInput), transform.forward);
         Debug.DrawRay(transform.position, transform.forward*20f, Color.red);
         Debug.DrawRay(transform.position, transform.TransformDirection(rawInput)*20f, Color.green);
+
+        HandleAiming();
     }
 
-    private void LateUpdate()
+    void HandleAiming()
+    {
+        if(Input.GetMouseButtonDown(1)) {
+            hasBow = !hasBow;
+            anim.SetBool("hasBow", hasBow);
+            spineAim.weight = 0;
+        }
+        if (!hasBow)
+            return;
+
+        if (hasBow) {
+            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 100))
+            {
+                Vector3 newPos = hit.point;
+                newPos.y = 0;
+                mouseAim.position = newPos;
+                //transform.rotation = Quaternion.LookRotation(newPos);
+            }
+            if(Input.GetMouseButtonDown(0))
+            {
+                if(hasDrawn)
+                {
+                    //shoot
+                    hasDrawn = false;
+                    bowAnimator.SetTrigger("shoot");
+                    anim.SetTrigger("shoot");
+                    anim.SetBool("isAiming", false);
+                }
+                else {
+                    //draw      
+                    hasDrawn = true;
+                    bowAnimator.SetTrigger("draw");
+                    anim.SetTrigger("draw");
+                    anim.SetBool("isAiming", true);
+                }
+            }
+        }
+    }
+
+    void LateUpdate()
     {
         HandleCover();
     }
@@ -90,6 +138,7 @@ public class Player : MonoBehaviour
                 isInCover = false; 
                 canMoveRight = true;
                 canMoveLeft = true;
+                anim.SetBool("cover", isInCover);
                 return;
             }
             Collider hitCollider = infront.GetComponent<Collider>();
@@ -116,10 +165,7 @@ public class Player : MonoBehaviour
 
     void HandleVault()
     {
-        if (!Input.GetKeyDown(KeyCode.V))
-            return;
-
-        if (isVaulting)
+        if (!Input.GetKeyDown(KeyCode.V) || isVaulting || hasBow)
             return;
 
         infront = null;
